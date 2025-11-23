@@ -44,11 +44,14 @@ const Agent = ({
 
     const vapiToken = process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN;
     if (!vapiToken) {
-      console.warn("VAPI token not found");
+      console.warn(
+        "VAPI token not found - check NEXT_PUBLIC_VAPI_WEB_TOKEN environment variable"
+      );
       return;
     }
     try {
       const vapiInstance = new Vapi(vapiToken);
+      console.log("VAPI initialized successfully");
       setVapi(vapiInstance);
     } catch (error) {
       console.error("Failed to initialize VAPI:", error);
@@ -89,8 +92,51 @@ const Agent = ({
       setIsSpeaking(false);
     };
 
-    const onError = (error: Error) => {
+    const onError = (error: any) => {
       console.error("VAPI error event:", error);
+
+      // The error is a Response object with error property already populated
+      // Access it directly without parsing
+      const errorObj = error?.error;
+      const status = error?.status || 400;
+
+      console.error("VAPI error object:", errorObj);
+      console.error("Error status:", status);
+
+      // Extract error message from the error object
+      let errorMessage = "Failed to start VAPI call";
+
+      if (errorObj && typeof errorObj === "object") {
+        // Log all properties of the error object
+        console.error("Error object keys:", Object.keys(errorObj));
+        console.error("Full error object:", errorObj);
+
+        // Try different possible error message locations
+        if (errorObj.message) {
+          errorMessage = errorObj.message;
+        } else if (errorObj.code) {
+          errorMessage = `Error code: ${errorObj.code}`;
+          if (errorObj.message) errorMessage += ` - ${errorObj.message}`;
+        } else if (errorObj.error) {
+          errorMessage = String(errorObj.error);
+        } else {
+          // Try to stringify the error object to see what's in it
+          try {
+            const errorStr = JSON.stringify(errorObj, null, 2);
+            console.error("Error object as JSON:", errorStr);
+            errorMessage =
+              errorStr.length < 200 ? errorStr : "See console for details";
+          } catch {
+            errorMessage = "Unknown VAPI error - check console";
+          }
+        }
+      } else if (typeof errorObj === "string") {
+        errorMessage = errorObj;
+      }
+
+      console.error("Final error message:", errorMessage);
+      
+
       setCallStatus(CallStatus.INACTIVE);
     };
 
@@ -146,7 +192,7 @@ const Agent = ({
   const handleCall = async () => {
     if (!vapi) {
       console.error("VAPI is not initialized. Please check your VAPI token.");
-      alert("VAPI is not initialized. Please check your environment variables.");
+      
       return;
     }
 
@@ -166,20 +212,29 @@ const Agent = ({
         if (!workflowId) {
           console.error("Error: NEXT_PUBLIC_VAPI_WORKFLOW_ID is not set");
           setCallStatus(CallStatus.INACTIVE);
-          alert("VAPI Workflow ID is missing. Please check your environment variables.");
+          
           return;
         }
 
-        console.log("Starting VAPI call with:", { workflowId, username: userName, userid: userId });
-
-        // VAPI SDK v2.3.0 - try the correct format based on documentation
-        // The workflow ID should be passed directly, and variables should be in variableValues
-        const result = await vapi.start(workflowId, {
-          variableValues: {
-            username: userName || "User",
-            userid: userId,
-          },
+        console.log("Starting VAPI call with:", {
+          workflowId,
+          username: userName,
+          userid: userId,
         });
+
+        // VAPI SDK v2.3.0 - Workflow format with multiple parameters
+        const result = await (vapi.start as any)(
+          undefined,
+          undefined,
+          undefined,
+          process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!,
+          {
+            variableValues: {
+              username: userName,
+              userid: userId,
+            },
+          }
+        );
 
         console.log("VAPI call started successfully:", result);
       } else {
@@ -202,10 +257,10 @@ const Agent = ({
       }
     } catch (error: unknown) {
       console.error("Error starting VAPI call:");
-      
+
       // Handle different error types
       let errorMessage = "Failed to start call. Please try again.";
-      
+
       if (error instanceof Error) {
         console.error("Error name:", error.name);
         console.error("Error message:", error.message);
@@ -214,12 +269,15 @@ const Agent = ({
       } else if (typeof error === "object" && error !== null) {
         // Try to extract VAPI error details - check multiple possible structures
         const errorObj = error as any;
-        
+
         // Check for Response object with error property
         if (errorObj.error) {
           console.error("VAPI error object:", errorObj.error);
           if (typeof errorObj.error === "object") {
-            errorMessage = errorObj.error.message || errorObj.error.code || JSON.stringify(errorObj.error);
+            errorMessage =
+              errorObj.error.message ||
+              errorObj.error.code ||
+              JSON.stringify(errorObj.error);
             console.error("VAPI error message:", errorObj.error.message);
             console.error("VAPI error code:", errorObj.error.code);
             console.error("Full VAPI error:", errorObj.error);
@@ -227,25 +285,28 @@ const Agent = ({
             errorMessage = String(errorObj.error);
           }
         }
-        
+
         // Try to extract any useful information from the error object
         try {
           console.error("Full error object:", error);
-          console.error("Error details (JSON):", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-          
+          console.error(
+            "Error details (JSON):",
+            JSON.stringify(error, Object.getOwnPropertyNames(error), 2)
+          );
+
           // Try to access common error properties
           if (errorObj.data) console.error("Error data:", errorObj.data);
           if (errorObj.status) console.error("Error status:", errorObj.status);
-          if (errorObj.statusText) console.error("Error statusText:", errorObj.statusText);
+          if (errorObj.statusText)
+            console.error("Error statusText:", errorObj.statusText);
         } catch (e) {
           console.error("Error object (non-serializable):", error);
         }
       } else {
         console.error("Unknown error type:", error);
       }
-      
+
       setCallStatus(CallStatus.INACTIVE);
-      alert(`Failed to start call: ${errorMessage}\n\nCheck console for details.`);
     }
   };
 

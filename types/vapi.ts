@@ -1,17 +1,17 @@
-enum MessageTypeEnum {
+export enum MessageTypeEnum {
   TRANSCRIPT = "transcript",
   FUNCTION_CALL = "function-call",
   FUNCTION_CALL_RESULT = "function-call-result",
   ADD_MESSAGE = "add-message",
 }
 
-enum MessageRoleEnum {
+export enum MessageRoleEnum {
   USER = "user",
   SYSTEM = "system",
   ASSISTANT = "assistant",
 }
 
-enum TranscriptMessageTypeEnum {
+export enum TranscriptMessageTypeEnum {
   PARTIAL = "partial",
   FINAL = "final",
 }
@@ -44,7 +44,8 @@ interface FunctionCallResultMessage extends BaseMessage {
   };
 }
 
-type Message =
+export type Message =
   | TranscriptMessage
   | FunctionCallMessage
   | FunctionCallResultMessage;
+

@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { vapi } from "@/lib/vapi.sdk";
 import { interviewer } from "@/constants";
 import { createFeedback } from "@/lib/actions/general.action";
+import type { Message } from "@/types/vapi";
+import { MessageTypeEnum, TranscriptMessageTypeEnum } from "@/types/vapi";
 
 enum CallStatus {
   INACTIVE = "INACTIVE",
@@ -45,7 +47,10 @@ const Agent = ({
     };
 
     const onMessage = (message: Message) => {
-      if (message.type === "transcript" && message.transcriptType === "final") {
+      if (
+        message.type === MessageTypeEnum.TRANSCRIPT &&
+        message.transcriptType === TranscriptMessageTypeEnum.FINAL
+      ) {
         const newMessage = { role: message.role, content: message.transcript };
         setMessages((prev) => [...prev, newMessage]);
       }

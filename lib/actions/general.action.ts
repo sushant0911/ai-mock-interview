@@ -95,31 +95,56 @@ export async function getLatestInterviews(
 ): Promise<Interview[] | null> {
   const { userId, limit = 20 } = params;
 
+  // Fetch only finalized interviews (single where clause - no index needed)
+  // We'll filter out current user's interviews and sort in memory
   const interviews = await db
     .collection("interviews")
-    .orderBy("createdAt", "desc")
     .where("finalized", "==", true)
-    .where("userId", "!=", userId)
-    .limit(limit)
     .get();
 
-  return interviews.docs.map((doc) => ({
+  // Filter, sort, and limit in memory to avoid index requirements
+  const mappedInterviews = interviews.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
   })) as Interview[];
+
+  // Filter out current user's interviews
+  const filteredInterviews = mappedInterviews.filter(
+    (interview) => interview.userId !== userId
+  );
+
+  // Sort by createdAt descending and limit results
+  const sortedInterviews = filteredInterviews
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+      return dateB - dateA; // Descending order
+    })
+    .slice(0, limit);
+
+  return sortedInterviews;
 }
 
 export async function getInterviewsByUserId(
   userId: string
 ): Promise<Interview[] | null> {
+  // Fetch interviews filtered by userId (no orderBy to avoid index requirement)
   const interviews = await db
     .collection("interviews")
     .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
     .get();
 
-  return interviews.docs.map((doc) => ({
+  // Sort in memory by createdAt descending
+  const mappedInterviews = interviews.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
   })) as Interview[];
+
+  const sortedInterviews = mappedInterviews.sort((a, b) => {
+    const dateA = new Date(a.createdAt || 0).getTime();
+    const dateB = new Date(b.createdAt || 0).getTime();
+    return dateB - dateA; // Descending order
+  });
+
+  return sortedInterviews;
 }

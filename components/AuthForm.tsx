@@ -81,12 +81,19 @@ const AuthForm = ({ type }: { type: FormType }) => {
           return;
         }
 
-        await signIn({
+        const result = await signIn({
           email,
           idToken,
         });
 
+        if (!result.success) {
+          toast.error(result.message);
+          return;
+        }
+
         toast.success("Signed in successfully.");
+        // Use router.refresh() to ensure server components re-render with new auth state
+        router.refresh();
         router.push("/");
       }
     } catch (error) {

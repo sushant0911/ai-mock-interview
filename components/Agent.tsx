@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { vapi } from "@/lib/vapi.sdk";
+import Vapi from "@vapi-ai/web";
 import { interviewer } from "@/constants";
 import { createFeedback } from "@/lib/actions/general.action";
 import type { Message } from "@/types/vapi";
@@ -36,8 +36,31 @@ const Agent = ({
   const [messages, setMessages] = useState<SavedMessage[]>([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [lastMessage, setLastMessage] = useState<string>("");
+  const [vapi, setVapi] = useState<Vapi | null>(null);
+
+  // Initialize VAPI instance on client side only
+  useEffect(() => {
+    if (typeof window === "undefined") return; // Skip on server
+
+    const vapiToken = process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN;
+    if (!vapiToken) {
+      console.warn("VAPI token not found");
+      return;
+    }
+    try {
+      const vapiInstance = new Vapi(vapiToken);
+      setVapi(vapiInstance);
+    } catch (error) {
+      console.error("Failed to initialize VAPI:", error);
+    }
+  }, []);
 
   useEffect(() => {
+    if (!vapi) {
+      console.warn("VAPI not initialized, skipping event listener setup");
+      return;
+    }
+
     const onCallStart = () => {
       setCallStatus(CallStatus.ACTIVE);
     };
@@ -67,7 +90,8 @@ const Agent = ({
     };
 
     const onError = (error: Error) => {
-      console.log("Error:", error);
+      console.error("VAPI error event:", error);
+      setCallStatus(CallStatus.INACTIVE);
     };
 
     vapi.on("call-start", onCallStart);
@@ -85,7 +109,7 @@ const Agent = ({
       vapi.off("speech-end", onSpeechEnd);
       vapi.off("error", onError);
     };
-  }, []);
+  }, [vapi]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -120,41 +144,89 @@ const Agent = ({
   }, [messages, callStatus, feedbackId, interviewId, router, type, userId]);
 
   const handleCall = async () => {
-    setCallStatus(CallStatus.CONNECTING);
+    if (!vapi) {
+      console.error("VAPI is not initialized. Please check your VAPI token.");
+      alert("VAPI is not initialized. Please check your environment variables.");
+      return;
+    }
 
-    if (type === "generate") {
-      // Validate userId exists before starting call
-      if (!userId) {
-        console.error("Error: userId is required but was not provided");
-        setCallStatus(CallStatus.INACTIVE);
-        return;
+    try {
+      setCallStatus(CallStatus.CONNECTING);
+
+      if (type === "generate") {
+        // Validate userId exists before starting call
+        if (!userId) {
+          console.error("Error: userId is required but was not provided");
+          setCallStatus(CallStatus.INACTIVE);
+          return;
+        }
+
+        // Validate VAPI workflow ID
+        const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
+        if (!workflowId) {
+          console.error("Error: NEXT_PUBLIC_VAPI_WORKFLOW_ID is not set");
+          setCallStatus(CallStatus.INACTIVE);
+          alert("VAPI Workflow ID is missing. Please check your environment variables.");
+          return;
+        }
+
+        console.log("Starting VAPI call with:", { workflowId, username: userName, userid: userId });
+
+        const result = await vapi.start(workflowId, {
+          variableValues: {
+            username: userName || "User",
+            userid: userId,
+          },
+        });
+
+        console.log("VAPI call started successfully:", result);
+      } else {
+        let formattedQuestions = "";
+        if (questions) {
+          formattedQuestions = questions
+            .map((question) => `- ${question}`)
+            .join("\n");
+        }
+
+        console.log("Starting interview with questions");
+
+        const result = await vapi.start(interviewer, {
+          variableValues: {
+            questions: formattedQuestions,
+          },
+        });
+
+        console.log("Interview call started successfully:", result);
       }
-
-      await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
-        variableValues: {
-          username: userName || "User",
-          userid: userId,
-        },
-      });
-    } else {
-      let formattedQuestions = "";
-      if (questions) {
-        formattedQuestions = questions
-          .map((question) => `- ${question}`)
-          .join("\n");
+    } catch (error: unknown) {
+      console.error("Error starting VAPI call:");
+      
+      // Handle different error types
+      if (error instanceof Error) {
+        console.error("Error name:", error.name);
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      } else if (typeof error === "object" && error !== null) {
+        // Try to extract any useful information from the error object
+        try {
+          console.error("Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+        } catch {
+          console.error("Error object (non-serializable):", error);
+        }
+      } else {
+        console.error("Unknown error type:", error);
       }
-
-      await vapi.start(interviewer, {
-        variableValues: {
-          questions: formattedQuestions,
-        },
-      });
+      
+      setCallStatus(CallStatus.INACTIVE);
+      alert("Failed to start call. Please check the console for details.");
     }
   };
 
   const handleDisconnect = () => {
     setCallStatus(CallStatus.FINISHED);
-    vapi.stop();
+    if (vapi) {
+      vapi.stop();
+    }
   };
 
   return (

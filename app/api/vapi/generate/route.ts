@@ -6,14 +6,14 @@ import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: Request) {
   const body = await request.json();
-  
+
   // Extract variables from request body (VAPI passes these as extracted variables)
-  const { 
-    type, 
-    role, 
-    level, 
-    techstack, 
-    amount, 
+  const {
+    type,
+    role,
+    level,
+    techstack,
+    amount,
     userid,
     // Also check for alternative variable names that VAPI might use
     userId = userid,
@@ -21,11 +21,19 @@ export async function POST(request: Request) {
 
   // Validate required fields
   if (!type || !role || !level || !techstack || !amount || !userId) {
-    console.error("Missing required fields:", { type, role, level, techstack, amount, userId });
+    console.error("Missing required fields:", {
+      type,
+      role,
+      level,
+      techstack,
+      amount,
+      userId,
+    });
     return Response.json(
-      { 
-        success: false, 
-        error: "Missing required fields: type, role, level, techstack, amount, and userid are required" 
+      {
+        success: false,
+        error:
+          "Missing required fields: type, role, level, techstack, amount, and userid are required",
       },
       { status: 400 }
     );

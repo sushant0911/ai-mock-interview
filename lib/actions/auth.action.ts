@@ -19,9 +19,11 @@ export async function setSessionCookie(idToken: string) {
   cookieStore.set("session", sessionCookie, {
     maxAge: SESSION_DURATION,
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: process.env.NODE_ENV === "production" || process.env.VERCEL === "1",
     path: "/",
     sameSite: "lax",
+    // Ensure cookie works across subdomains if needed
+    // domain: process.env.NODE_ENV === "production" ? ".yourdomain.com" : undefined,
   });
 }
 
@@ -79,8 +81,13 @@ export async function signIn(params: SignInParams) {
       };
 
     await setSessionCookie(idToken);
+    
+    return {
+      success: true,
+      message: "Signed in successfully.",
+    };
   } catch (error: any) {
-    console.log("");
+    console.error("Sign in error:", error);
 
     return {
       success: false,

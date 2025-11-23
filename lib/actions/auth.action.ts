@@ -8,23 +8,29 @@ const SESSION_DURATION = 60 * 60 * 24 * 7;
 
 // Set session cookie
 export async function setSessionCookie(idToken: string) {
-  const cookieStore = await cookies();
+  try {
+    const cookieStore = await cookies();
 
-  // Create session cookie
-  const sessionCookie = await auth.createSessionCookie(idToken, {
-    expiresIn: SESSION_DURATION * 1000, // milliseconds
-  });
+    // Create session cookie
+    const sessionCookie = await auth.createSessionCookie(idToken, {
+      expiresIn: SESSION_DURATION * 1000, // milliseconds
+    });
 
-  // Set cookie in the browser
-  cookieStore.set("session", sessionCookie, {
-    maxAge: SESSION_DURATION,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production" || process.env.VERCEL === "1",
-    path: "/",
-    sameSite: "lax",
-    // Ensure cookie works across subdomains if needed
-    // domain: process.env.NODE_ENV === "production" ? ".yourdomain.com" : undefined,
-  });
+    // Determine if we're in production
+    const isProduction = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+
+    // Set cookie in the browser
+    cookieStore.set("session", sessionCookie, {
+      maxAge: SESSION_DURATION,
+      httpOnly: true,
+      secure: isProduction, // Only secure in production (HTTPS required)
+      path: "/",
+      sameSite: "lax",
+    });
+  } catch (error: any) {
+    console.error("Error setting session cookie:", error);
+    throw new Error(`Failed to set session cookie: ${error?.message || "Unknown error"}`);
+  }
 }
 
 export async function signUp(params: SignUpParams) {
@@ -73,6 +79,15 @@ export async function signIn(params: SignInParams) {
   const { email, idToken } = params;
 
   try {
+    // Verify Firebase Admin is initialized
+    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+      console.error("Firebase Admin environment variables are missing");
+      return {
+        success: false,
+        message: "Server configuration error. Please contact support.",
+      };
+    }
+
     const userRecord = await auth.getUserByEmail(email);
     if (!userRecord)
       return {
@@ -88,10 +103,30 @@ export async function signIn(params: SignInParams) {
     };
   } catch (error: any) {
     console.error("Sign in error:", error);
+    console.error("Error details:", {
+      code: error?.code,
+      message: error?.message,
+      stack: error?.stack,
+    });
+
+    // Provide more specific error messages
+    if (error?.code === "auth/invalid-argument") {
+      return {
+        success: false,
+        message: "Invalid credentials. Please check your email and password.",
+      };
+    }
+
+    if (error?.code === "auth/user-not-found") {
+      return {
+        success: false,
+        message: "User does not exist. Create an account.",
+      };
+    }
 
     return {
       success: false,
-      message: "Failed to log into account. Please try again.",
+      message: error?.message || "Failed to log into account. Please try again.",
     };
   }
 }

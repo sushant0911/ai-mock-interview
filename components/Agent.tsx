@@ -172,6 +172,8 @@ const Agent = ({
 
         console.log("Starting VAPI call with:", { workflowId, username: userName, userid: userId });
 
+        // VAPI SDK v2.3.0 - try the correct format based on documentation
+        // The workflow ID should be passed directly, and variables should be in variableValues
         const result = await vapi.start(workflowId, {
           variableValues: {
             username: userName || "User",
@@ -202,15 +204,40 @@ const Agent = ({
       console.error("Error starting VAPI call:");
       
       // Handle different error types
+      let errorMessage = "Failed to start call. Please try again.";
+      
       if (error instanceof Error) {
         console.error("Error name:", error.name);
         console.error("Error message:", error.message);
         console.error("Error stack:", error.stack);
+        errorMessage = error.message;
       } else if (typeof error === "object" && error !== null) {
+        // Try to extract VAPI error details - check multiple possible structures
+        const errorObj = error as any;
+        
+        // Check for Response object with error property
+        if (errorObj.error) {
+          console.error("VAPI error object:", errorObj.error);
+          if (typeof errorObj.error === "object") {
+            errorMessage = errorObj.error.message || errorObj.error.code || JSON.stringify(errorObj.error);
+            console.error("VAPI error message:", errorObj.error.message);
+            console.error("VAPI error code:", errorObj.error.code);
+            console.error("Full VAPI error:", errorObj.error);
+          } else {
+            errorMessage = String(errorObj.error);
+          }
+        }
+        
         // Try to extract any useful information from the error object
         try {
-          console.error("Error details:", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-        } catch {
+          console.error("Full error object:", error);
+          console.error("Error details (JSON):", JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+          
+          // Try to access common error properties
+          if (errorObj.data) console.error("Error data:", errorObj.data);
+          if (errorObj.status) console.error("Error status:", errorObj.status);
+          if (errorObj.statusText) console.error("Error statusText:", errorObj.statusText);
+        } catch (e) {
           console.error("Error object (non-serializable):", error);
         }
       } else {
@@ -218,7 +245,7 @@ const Agent = ({
       }
       
       setCallStatus(CallStatus.INACTIVE);
-      alert("Failed to start call. Please check the console for details.");
+      alert(`Failed to start call: ${errorMessage}\n\nCheck console for details.`);
     }
   };
 

@@ -5,7 +5,31 @@ import { db } from "@/firebase/admin";
 import { getRandomInterviewCover } from "@/lib/utils";
 
 export async function POST(request: Request) {
-  const { type, role, level, techstack, amount, userid } = await request.json();
+  const body = await request.json();
+  
+  // Extract variables from request body (VAPI passes these as extracted variables)
+  const { 
+    type, 
+    role, 
+    level, 
+    techstack, 
+    amount, 
+    userid,
+    // Also check for alternative variable names that VAPI might use
+    userId = userid,
+  } = body;
+
+  // Validate required fields
+  if (!type || !role || !level || !techstack || !amount || !userId) {
+    console.error("Missing required fields:", { type, role, level, techstack, amount, userId });
+    return Response.json(
+      { 
+        success: false, 
+        error: "Missing required fields: type, role, level, techstack, amount, and userid are required" 
+      },
+      { status: 400 }
+    );
+  }
 
   try {
     const { text: questions } = await generateText({
@@ -31,7 +55,7 @@ export async function POST(request: Request) {
       level: level,
       techstack: techstack.split(","),
       questions: JSON.parse(questions),
-      userId: userid,
+      userId: userId,
       finalized: true,
       coverImage: getRandomInterviewCover(),
       createdAt: new Date().toISOString(),

@@ -123,9 +123,16 @@ const Agent = ({
     setCallStatus(CallStatus.CONNECTING);
 
     if (type === "generate") {
+      // Validate userId exists before starting call
+      if (!userId) {
+        console.error("Error: userId is required but was not provided");
+        setCallStatus(CallStatus.INACTIVE);
+        return;
+      }
+
       await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
         variableValues: {
-          username: userName,
+          username: userName || "User",
           userid: userId,
         },
       });
